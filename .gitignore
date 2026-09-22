@@ -1,0 +1,13 @@
+# macOS
+.DS_Store
+
+# Never commit staff data to a public repo — the tools read spreadsheets
+# from the user's own machine, nothing needs to live here.
+*.xlsx
+*.xls
+*.xlsm
+*.csv
+
+# Python / scratch
+.venv/
+__pycache__/

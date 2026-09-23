@@ -14,6 +14,7 @@ safely be public — and why no data file should ever be committed to it.
 |------|------|-------|
 | Admin tools menu | `index.html` | here |
 | T2397D Recertification | `t2397d.html` | here |
+| T2722D Recertification | `t2722d.html` | here |
 | Weekly Course Numbers | `weekly-numbers.html` | here |
 | Technician Qualification Compliance | — | [its own repo](https://github.com/MBTrainingUK/Technician-Qualification-Compliance-Tool) |
 
@@ -29,10 +30,30 @@ the working history, but editing them no longer changes what anyone sees.
 
 - `t2397d.html` came from `Desktop/Projects/T2397D tool/T2397D Automation v2 3.html`
 - `weekly-numbers.html` came from `Desktop/Projects/Weekly numbers tool/Course_Management_Dashboard.html`
+- `t2722d.html` was built here, from `t2397d.html`, and has no Desktop original
 
 To change a tool, edit it **here** and push. If you would rather keep working in
 the Desktop folder, copy the result over afterwards and re-apply the back bar —
 it is the small `<!-- Back to the admin tools menu -->` block just inside `<body>`.
+
+## A note on the T2722D tracker
+
+`t2722d.html` reads its columns by position and by content, not by header name, and
+that is deliberate. In the T2722D export the `Active Profiles` header row is shifted
+one column against its own data — the `First name` header sits over surnames and the
+usernames sit under `Last name` — so a lookup by header name matches nobody and the
+tool reports zero overdue without erroring. It finds the username and status columns
+by testing which ones actually hold usernames and Active/Inactive values.
+
+Completions there are also blocks of three columns, `[course no] [status] [date]`,
+with the block header sitting over the *status* column and naming the course. Only
+blocks labelled T2722D are counted; the export also carries empty blocks mislabelled
+with a different course code (T2110E), and anything found under those is reported as
+a note rather than counted. A completion counts only when the status reads `Passed`
+and the date cell holds a real date — rows still `Enrolled` carry a literal `-`.
+
+The course code is spelt inconsistently in the source files: the tracker filename
+says T2772D, everything inside says T2722D. T2722D is correct.
 
 ## Adding a tool
 

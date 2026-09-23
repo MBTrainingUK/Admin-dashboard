@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>T2722D Compliance Report</title>
+    <!-- 1. Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 2. SheetJS (xlsx) for reading AND writing Excel files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <style>
+        /* Inter font for a clean look */
+        body {
+            font-family: 'Inter', sans-serif;
+            scroll-behavior: smooth;
+        }
+        /* Style for the loading spinner */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Helper class to hide elements */
+        .hidden {
+            display: none;
+        }
+        /* Email Preview Styling to match Outlook default look slightly */
+        #emailPreviewContent {
+            font-family: Calibri, Helvetica, sans-serif;
+            font-size: 11pt;
+            line-height: 1.6;
+            color: #000;
+        }
+        #emailPreviewContent p {
+            margin: 0 0 18px;
+        }
+        #emailPreviewContent table {
+            margin: 0 0 18px;
+        }
+        #emailPreviewContent a {
+            display: inline-block;
+            margin: 0 0 18px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+    <!-- Back to the admin tools menu -->
+    <div class="bg-white border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
+            <a href="index.html" class="inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-indigo-600">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+                All admin tools
+            </a>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <header class="bg-white shadow-md">
+        <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+            <h1 class="text-3xl font-bold text-gray-900">
+                T2722D Compliance Report Generator
+            </h1>
+            <p class="mt-1 text-gray-600">Upload your Excel tracker to find users who are overdue for their annual T2722D training &mdash; High-Voltage Systems in Motor Vehicles, the safe handling of lithium-ion batteries.</p>
+            <p class="mt-1 text-sm text-gray-500">Anyone whose most recent pass is a year old or older is flagged. Needs the <strong>ReCertification List</strong> and <strong>Active Profiles</strong> sheets.</p>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+
+        <!-- File Upload Section -->
+        <div class="bg-white p-6 rounded-lg shadow-md">
+            <div class="mb-4">
+                <label for="excelFile" class="block text-lg font-medium text-gray-800 mb-2">Upload Excel Tracker</label>
+                <input type="file" id="excelFile" accept=".xlsx, .xls" class="block w-full text-sm text-gray-500
+                    file:mr-4 file:py-2 file:px-4
+                    file:rounded-md file:border-0
+                    file:text-sm file:font-semibold
+                    file:bg-blue-50 file:text-blue-700
+                    hover:file:bg-blue-100
+                " onchange="checkFiles()">
+            </div>
+
+            <button id="generateBtn"
+                    class="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all duration-300"
+                    onclick="handleReportGeneration()"
+                    disabled>
+                Generate Report
+            </button>
+
+            <!-- Status Message Area -->
+            <div id="status" class="mt-4 text-center"></div>
+        </div>
+
+        <!-- Report Results Section (hidden by default) -->
+        <div id="reportContainer" class="hidden mt-8">
+            <!-- Sticky Filter Bar -->
+            <div id="filterBar" class="bg-white p-4 rounded-lg shadow-md sticky top-4 z-10 mb-6 border border-gray-200">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                    <!-- Search Inputs -->
+                    <div>
+                        <label for="siteSearch" class="block text-sm font-medium text-gray-700">Filter by Site</label>
+                        <input type="text" id="siteSearch" oninput="applyFilters()" placeholder="Type a site name..." class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                    </div>
+                    <div>
+                        <label for="nameSearch" class="block text-sm font-medium text-gray-700">Filter by Name</label>
+                        <input type="text" id="nameSearch" oninput="applyFilters()" placeholder="Type a user name..." class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                    </div>
+                </div>
+                 <!-- Toggle and Download Button -->
+                <div class="mt-4 flex flex-col sm:flex-row justify-between items-center space-y-3 sm:space-y-0">
+                    <div class="relative flex items-start">
+                        <div class="flex h-6 items-center">
+                            <input id="hideNeverCompleted" onchange="applyFilters()" name="hideNeverCompleted" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-600">
+                        </div>
+                        <div class="ml-3 text-sm leading-6">
+                            <label for="hideNeverCompleted" class="font-medium text-gray-900">Hide users who have 'Never Completed'</label>
+                        </div>
+                    </div>
+
+                    <div class="flex space-x-2">
+                        <button id="resetLogBtn" onclick="resetEmailLog()" class="w-full sm:w-auto bg-red-600 text-white font-bold py-2 px-5 rounded-lg shadow hover:bg-red-700 transition-all duration-300">
+                            Reset Email Log
+                        </button>
+                        <button id="downloadTrackerBtn" onclick="downloadTrackerExcel()" class="w-full sm:w-auto bg-teal-600 text-white font-bold py-2 px-5 rounded-lg shadow hover:bg-teal-700 transition-all duration-300">
+                            Download Completed Tracker
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Report Output Area -->
+            <div id="reportOutput" class="bg-white p-6 rounded-lg shadow-md overflow-hidden">
+                <!-- Content will be injected here by JavaScript -->
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Email Preview Modal -->
+    <div id="emailModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+        <div class="relative top-10 mx-auto p-0 border w-11/12 md:w-3/4 lg:w-1/2 shadow-2xl rounded-lg bg-white flex flex-col" style="max-height: 90vh;">
+            <!-- Modal Header -->
+            <div class="bg-gray-100 px-6 py-4 rounded-t-lg border-b border-gray-200 flex justify-between items-center">
+                <h3 class="text-lg font-bold text-gray-800">Email Preview</h3>
+                <button onclick="closeEmailModal()" class="text-gray-500 hover:text-gray-700 font-bold text-xl">&times;</button>
+            </div>
+
+            <!-- Modal Body (Scrollable) -->
+            <div class="p-6 overflow-y-auto bg-gray-50 flex-grow">
+                <div class="bg-white border border-gray-300 p-6 rounded shadow-sm" id="emailPreviewContainer">
+                    <!-- Content injected via JS -->
+                    <div id="emailPreviewContent" contenteditable="true" class="outline-none"></div>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="bg-gray-100 px-6 py-4 rounded-b-lg border-t border-gray-200 flex flex-col md:flex-row justify-between items-center gap-4">
+                <div class="text-sm text-gray-500 italic text-center md:text-left mb-2 md:mb-0">
+                    1. Click <b>Copy</b>. 2. Click <b>Open Mail</b>. 3. <b>Paste</b> (Ctrl+V).
+                </div>
+                <div class="flex flex-col sm:flex-row gap-3 w-full md:w-auto justify-center">
+                    <button onclick="copyEmailContent()" class="w-full sm:w-auto bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700 transition duration-200 flex items-center justify-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
+                        Copy to Clipboard
+                    </button>
+                    <a id="openMailLink" href="#" target="_blank" class="w-full sm:w-auto bg-green-600 text-white font-bold py-2 px-4 rounded hover:bg-green-700 transition duration-200 text-center flex items-center justify-center gap-2 no-underline">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                        Open Mail App
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ═══════════════════════════════════════════════════════════════════
+        //  T2722D Compliance Report Generator
+        //
+        //  Built from the T2397D tool, but the T2722D tracker is laid out
+        //  differently in two ways that matter, both handled below:
+        //
+        //  1. The 'Active Profiles' header row is shifted one column against
+        //     its own data (the 'First name' header sits over surnames, and
+        //     the usernames sit under 'Last name'). Reading that sheet by
+        //     header name matches nobody and silently reports zero overdue,
+        //     so the columns there are found by content instead.
+        //
+        //  2. Completions are not in 'Completed...' columns. They are blocks
+        //     of three: [course no] [status] [completion date], with the
+        //     block header sitting over the STATUS column and carrying the
+        //     course code. Some blocks in this export are mislabelled with a
+        //     different course code (T2110E), so only T2722D blocks count.
+        // ═══════════════════════════════════════════════════════════════════
+
+        // The GTLS course page delegates need to reach. Swap this if the
+        // course is ever re-catalogued and the ID changes.
+        const PORTAL_LINK = "https://learningsystem.mercedes-benz.com/ilp/pages/description.jsf?menuId=452134&designMenuId=452134#/users/@self/catalogues/165128710/coursetemplates/167456327/description";
+
+        // Store user data globally to avoid re-calculating
+        let allOverdueUsers = [];
+        let groupedBySite = {};
+        let currentSiteBeingEmailed = null; // Track which site is active in modal
+        let lastRunStats = {};              // Counts from the most recent run
+
+        // --- 1. File Input Handling ---
+
+        function checkFiles() {
+            const fileInput = document.getElementById('excelFile');
+            const generateBtn = document.getElementById('generateBtn');
+            generateBtn.disabled = !fileInput.files || fileInput.files.length === 0;
+        }
+
+        async function handleReportGeneration() {
+            const fileInput = document.getElementById('excelFile');
+            const statusEl = document.getElementById('status');
+            const reportContainer = document.getElementById('reportContainer');
+            const reportOutput = document.getElementById('reportOutput');
+
+            // Reset UI
+            statusEl.innerHTML = '<div class="flex items-center justify-center text-blue-600"><div class="loader mr-3"></div>Processing your Excel file... This may take a moment.</div>';
+            reportContainer.classList.add('hidden');
+            reportOutput.innerHTML = '';
+            allOverdueUsers = [];
+            groupedBySite = {};
+            lastRunStats = {};
+
+            // Give the browser a moment to show the loading spinner
+            await new Promise(resolve => setTimeout(resolve, 50));
+
+            try {
+                const file = fileInput.files[0];
+                const data = await file.arrayBuffer();
+                const workbook = XLSX.read(data, { cellDates: true });
+
+                // Find the sheets. The course code has been spelt inconsistently
+                // across exports (T2722D / T2772D), so match on the suffix rather
+                // than on an exact sheet name.
+                const certSheet   = findSheet(workbook, /recertification list\s*$/i);
+                const activeSheet = findSheet(workbook, /^\s*active profiles\s*$/i);
+
+                if (!certSheet || !activeSheet) {
+                    throw new Error("Could not find the required sheets. This tool needs a '... ReCertification List' sheet and an 'Active Profiles' sheet.");
+                }
+
+                // Read as rows of cells, NOT keyed by header — see note 1 at the top.
+                const certRows   = XLSX.utils.sheet_to_json(certSheet,   { header: 1, defval: null });
+                const activeRows = XLSX.utils.sheet_to_json(activeSheet, { header: 1, defval: null });
+
+                // Process the data
+                processData(certRows, activeRows);
+
+                // Render the full report
+                renderReport();
+
+                let msg = `Report generated successfully. Found ${allOverdueUsers.length} overdue ${allOverdueUsers.length === 1 ? 'user' : 'users'} across ${Object.keys(groupedBySite).length} sites (${lastRunStats.compliant} compliant).`;
+                statusEl.innerHTML = `<div class="text-green-600 font-semibold">${msg}</div>`;
+
+                if (lastRunStats.ignoredForeign > 0) {
+                    statusEl.innerHTML += `<div class="mt-2 text-amber-700 text-sm">Note: ignored ${lastRunStats.ignoredForeign} completion(s) sitting under non-T2722D column(s) (${lastRunStats.foreignLabels.join(', ')}). These are a different course and do not count towards T2722D.</div>`;
+                }
+
+                reportContainer.classList.remove('hidden');
+
+            } catch (error) {
+                console.error("Error processing file:", error);
+                statusEl.innerHTML = `<div class="text-red-600 font-bold">Error: ${error.message}</div>`;
+            }
+        }
+
+        // --- 2. Data Processing Logic ---
+
+        function processData(certRows, activeRows) {
+            if (!certRows || certRows.length < 2) {
+                throw new Error("The ReCertification List sheet has no data rows.");
+            }
+            if (!activeRows || activeRows.length < 2) {
+                throw new Error("The Active Profiles sheet has no data rows.");
+            }
+
+            const certHeader = certRows[0].map(cellText);
+            const certData   = certRows.slice(1).filter(rowHasContent);
+
+            // --- People columns on the recert sheet (its own header row is sound) ---
+            const cOutlet = findCol(certHeader, ['outlet name']);
+            const cFirst  = findCol(certHeader, ['first name']);
+            const cSur     = findCol(certHeader, ['surname', 'last name']);
+            const cUser   = findCol(certHeader, ['username']);
+
+            if ([cOutlet, cFirst, cSur, cUser].some(i => i < 0)) {
+                throw new Error("The ReCertification List sheet is missing one of these columns: Outlet name, First Name, Surname, Username.");
+            }
+
+            // --- Completion blocks: [course no] [status] [completion date] ---
+            // The header sits over the status column and names the course.
+            const blocks  = [];   // T2722D — these count
+            const foreign = [];   // a different course code — these do not
+            certHeader.forEach((h, i) => {
+                if (!h) return;
+                if (/^t2722d/i.test(h) || /^t2772d/i.test(h)) {
+                    blocks.push({ label: h, status: i, date: i + 1 });
+                } else if (/^t\d{4}[a-z]/i.test(h)) {
+                    foreign.push({ label: h, status: i, date: i + 1 });
+                }
+            });
+
+            if (blocks.length === 0) {
+                throw new Error("No T2722D completion columns were found on the ReCertification List sheet.");
+            }
+
+            // --- Active Profiles: find the columns by content, not by header ---
+            const certUsernames = new Set(certData.map(r => cellText(r[cUser])).filter(Boolean));
+            const activeData = activeRows.slice(1).filter(rowHasContent);
+            const width = activeData.reduce((w, r) => Math.max(w, r.length), 0);
+            const sample = activeData.slice(0, 500);
+
+            // The username column is whichever one actually matches the recert list.
+            let aUser = -1, bestHits = 0;
+            for (let i = 0; i < width; i++) {
+                let hits = 0;
+                for (const r of sample) {
+                    if (certUsernames.has(cellText(r[i]))) hits++;
+                }
+                if (hits > bestHits) { bestHits = hits; aUser = i; }
+            }
+            if (aUser < 0 || bestHits === 0) {
+                throw new Error("Could not line up 'Active Profiles' with the ReCertification List — no column of usernames matched. Check that both sheets came from the same export.");
+            }
+
+            // The status column is whichever one holds Active / Inactive values.
+            let aStatus = -1;
+            for (let i = 0; i < width; i++) {
+                let hits = 0;
+                for (const r of sample) {
+                    const v = cellText(r[i]).toLowerCase();
+                    if (v === 'active' || v === 'inactive') hits++;
+                }
+                if (hits > sample.length * 0.5) { aStatus = i; break; }
+            }
+
+            const activeUsernames = new Set();
+            for (const r of activeData) {
+                const u = cellText(r[aUser]);
+                if (!u) continue;
+                // If there is no status column, the sheet is already just active people.
+                if (aStatus < 0 || cellText(r[aStatus]).toLowerCase() === 'active') {
+                    activeUsernames.add(u);
+                }
+            }
+
+            // --- Work out who is overdue ---
+            // The rule: flag anyone whose most recent pass is a year old or older
+            // as of today. Everything else is compliant.
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const cutoff = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate());
+
+            allOverdueUsers = [];
+            groupedBySite = {};
+            let compliantCount = 0;
+            let notOnActiveList = 0;
+            let ignoredForeign = 0;
+
+            for (const row of certData) {
+                const username = cellText(row[cUser]);
+                if (!username) continue;
+
+                if (!activeUsernames.has(username)) {
+                    notOnActiveList++;
+                    continue;
+                }
+
+                // Latest genuine pass across every T2722D block
+                let latest = null;
+                for (const b of blocks) {
+                    const d = passedDate(row[b.status], row[b.date]);
+                    if (d && (!latest || d > latest)) latest = d;
+                }
+
+                // Count anything we are deliberately not reading, so it can be surfaced
+                for (const f of foreign) {
+                    if (passedDate(row[f.status], row[f.date])) ignoredForeign++;
+                }
+
+                let dueDate = null;
+                let dueDateStr = "Never Completed";
+                let isOverdue = true;
+
+                if (latest) {
+                    dueDate = new Date(latest.getFullYear() + 1, latest.getMonth(), latest.getDate());
+                    dueDateStr = formatDate(dueDate);
+                    isOverdue = latest <= cutoff;
+                }
+
+                if (!isOverdue) {
+                    compliantCount++;
+                    continue;
+                }
+
+                const userData = {
+                    site: cellText(row[cOutlet]) || 'Unknown site',
+                    name: `${cellText(row[cSur])}, ${cellText(row[cFirst])}`, // Surname first
+                    username: username,
+                    lastDone: latest,
+                    lastDoneStr: latest ? formatDate(latest) : '—',
+                    dueDate: dueDate,
+                    dueDateStr: dueDateStr,
+                    isNever: !latest
+                };
+
+                allOverdueUsers.push(userData);
+
+                if (!groupedBySite[userData.site]) {
+                    groupedBySite[userData.site] = [];
+                }
+                groupedBySite[userData.site].push(userData);
+            }
+
+            // Sort users within each site group
+            for (const site in groupedBySite) {
+                groupedBySite[site].sort((a, b) => a.name.localeCompare(b.name));
+            }
+
+            lastRunStats = {
+                compliant: compliantCount,
+                notOnActiveList: notOnActiveList,
+                ignoredForeign: ignoredForeign,
+                foreignLabels: foreign.map(f => f.label)
+            };
+        }
+
+        // --- 3. Report Rendering and Filtering ---
+
+        function renderReport() {
+            const reportOutput = document.getElementById('reportOutput');
+            const siteSearch = document.getElementById('siteSearch');
+            const nameSearch = document.getElementById('nameSearch');
+            const hideNeverToggle = document.getElementById('hideNeverCompleted');
+
+            // Reset filters
+            siteSearch.value = '';
+            nameSearch.value = '';
+            hideNeverToggle.checked = false;
+
+            if (allOverdueUsers.length === 0) {
+                reportOutput.innerHTML = '<p class="text-gray-700">No overdue users found. Everyone is compliant!</p>';
+                return;
+            }
+
+            let html = '';
+            const sortedSites = Object.keys(groupedBySite).sort();
+
+            // Build the HTML for the entire report *once*
+            for (const site of sortedSites) {
+                const users = groupedBySite[site];
+                const siteId = site.replace(/[^a-zA-Z0-9]/g, ''); // Create safe ID
+
+                html += `
+                    <div class="site-container mb-8" data-site-name="${site.toLowerCase()}">
+                        <div class="flex justify-between items-center mb-3 pb-2 border-b border-gray-300">
+                            <h2 id="${siteId}" class="text-2xl font-bold text-gray-800">${site}</h2>
+                            <button onclick="prepareEmail(this)"
+                                    data-site-name="${site}"
+                                    class="email-button bg-blue-500 text-white text-xs font-semibold py-2 px-3 rounded-lg hover:bg-blue-600 transition-all duration-200">
+                                Email Site
+                            </button>
+                        </div>
+                        <table class="min-w-full divide-y divide-gray-200 table-fixed">
+                            <colgroup>
+                                <col style="width: 36%;">
+                                <col style="width: 20%;">
+                                <col style="width: 22%;">
+                                <col style="width: 22%;">
+                            </colgroup>
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Completed</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Due Date</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                `;
+
+                for (const user of users) {
+                    const isNeverStr = user.isNever ? 'true' : 'false';
+                    const dueDateClass = user.isNever ? 'text-red-600 font-bold' : 'text-gray-900';
+                    html += `
+                        <tr class="user-row" data-user-name="${user.name.toLowerCase()}" data-is-never="${isNeverStr}">
+                            <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${user.name}</td>
+                            <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-600">${user.username}</td>
+                            <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-600">${user.lastDoneStr}</td>
+                            <td class="px-4 py-3 whitespace-nowrap text-sm ${dueDateClass}">${user.dueDateStr}</td>
+                        </tr>
+                    `;
+                }
+
+                html += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+
+            reportOutput.innerHTML = html;
+            // After rendering, check localStorage for emailed sites
+            updateEmailedButtons();
+        }
+
+        function applyFilters() {
+            const siteFilter = document.getElementById('siteSearch').value.toLowerCase();
+            const nameFilter = document.getElementById('nameSearch').value.toLowerCase();
+            const hideNever = document.getElementById('hideNeverCompleted').checked;
+
+            const siteContainers = document.querySelectorAll('.site-container');
+            let totalSitesVisible = 0;
+
+            siteContainers.forEach(container => {
+                const siteName = container.getAttribute('data-site-name');
+                const userRows = container.querySelectorAll('.user-row');
+                let usersVisibleInSite = 0;
+
+                // 1. Filter by Site Name
+                if (siteName.includes(siteFilter)) {
+                    container.classList.remove('hidden');
+
+                    // 2. Filter by User Name and "Never Completed" Toggle
+                    userRows.forEach(row => {
+                        const userName = row.getAttribute('data-user-name');
+                        const isNever = row.getAttribute('data-is-never') === 'true';
+
+                        const nameMatch = userName.includes(nameFilter);
+                        const neverMatch = !hideNever || !isNever;
+
+                        if (nameMatch && neverMatch) {
+                            row.classList.remove('hidden');
+                            usersVisibleInSite++;
+                        } else {
+                            row.classList.add('hidden');
+                        }
+                    });
+
+                    // 3. Hide Site Container if no users match
+                    if (usersVisibleInSite > 0) {
+                        container.classList.remove('hidden');
+                        totalSitesVisible++;
+                    } else {
+                        container.classList.add('hidden');
+                    }
+
+                } else {
+                    container.classList.add('hidden');
+                }
+            });
+
+            // Handle "no results" message
+            const reportOutput = document.getElementById('reportOutput');
+            let noResultsEl = document.getElementById('noResultsMessage');
+            if (!noResultsEl) {
+                noResultsEl = document.createElement('p');
+                noResultsEl.id = 'noResultsMessage';
+                noResultsEl.className = 'text-gray-700 font-semibold text-lg';
+                reportOutput.prepend(noResultsEl); // Add to top
+            }
+
+            if (totalSitesVisible === 0) {
+                noResultsEl.textContent = 'No matching users found for the current filters.';
+                noResultsEl.classList.remove('hidden');
+            } else {
+                noResultsEl.classList.add('hidden');
+            }
+        }
+
+
+        // --- 4. Helper & Utility Functions ---
+
+        function findSheet(workbook, pattern) {
+            const name = workbook.SheetNames.find(n => pattern.test(String(n).trim()));
+            return name ? workbook.Sheets[name] : null;
+        }
+
+        function cellText(v) {
+            if (v === null || v === undefined) return '';
+            if (v instanceof Date) return formatDate(v);
+            return String(v).trim();
+        }
+
+        function rowHasContent(row) {
+            return Array.isArray(row) && row.some(c => c !== null && c !== undefined && String(c).trim() !== '');
+        }
+
+        function findCol(header, names) {
+            for (const name of names) {
+                const i = header.findIndex(h => h.toLowerCase() === name);
+                if (i >= 0) return i;
+            }
+            // Fall back to a looser match if the exact label has drifted
+            for (const name of names) {
+                const i = header.findIndex(h => h.toLowerCase().includes(name));
+                if (i >= 0) return i;
+            }
+            return -1;
+        }
+
+        // A completion only counts when the status says Passed AND the date cell
+        // holds a real date. Rows still 'Enrolled' carry a literal '-' as the date.
+        function passedDate(statusCell, dateCell) {
+            if (cellText(statusCell).toLowerCase() !== 'passed') return null;
+            return toDate(dateCell);
+        }
+
+        function toDate(v) {
+            if (v instanceof Date && !isNaN(v.getTime())) {
+                return new Date(v.getFullYear(), v.getMonth(), v.getDate());
+            }
+            if (typeof v === 'number') {
+                return excelSerialToDate(v);
+            }
+            if (typeof v === 'string') {
+                const s = v.trim();
+                if (!s || s === '-') return null;
+                const uk = parseUKDate(s);
+                if (uk) return uk;
+                const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+                if (iso) {
+                    const d = new Date(+iso[1], +iso[2] - 1, +iso[3]);
+                    return isNaN(d.getTime()) ? null : d;
+                }
+            }
+            return null;
+        }
+
+        function parseUKDate(dateStr) {
+            // Supports DD/MM/YYYY and DD-MM-YYYY
+            const parts = dateStr.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+            if (!parts) return null;
+            // parts[0] is full match, parts[1] is Day, parts[2] is Month, parts[3] is Year
+            const d = new Date(parts[3], parts[2] - 1, parts[1]);
+            // Check for invalid dates (e.g., 31/02/2025)
+            if (d.getDate() != parts[1] || d.getMonth() + 1 != parts[2] || d.getFullYear() != parts[3]) {
+                return null;
+            }
+            return d;
+        }
+
+        function excelSerialToDate(serial) {
+            // Excel's epoch starts on 1900-01-01, but it incorrectly thinks 1900 is a leap year.
+            // JavaScript's epoch is 1970-01-01.
+            // The magic number 25569 is the difference in days (with 1 day adjustment for the leap year bug).
+            const utc_days = Math.floor(serial - 25569);
+            const date = new Date(utc_days * 86400 * 1000);
+            // Adjust for timezone offset
+            const timezoneOffset = date.getTimezoneOffset() * 60000;
+            return new Date(date.getTime() + timezoneOffset);
+        }
+
+        function formatDate(date) {
+            if (!date) return "";
+            const d = String(date.getDate()).padStart(2, '0');
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const y = date.getFullYear();
+            return `${d}/${m}/${y}`;
+        }
+
+        // --- Email Generator Logic ---
+
+        function prepareEmail(button) {
+            const siteName = button.getAttribute('data-site-name');
+            const hideNever = document.getElementById('hideNeverCompleted').checked;
+
+            currentSiteBeingEmailed = siteName;
+
+            // Re-build the user list based on current filters
+            let usersForEmail = [];
+            if (groupedBySite[siteName]) {
+                groupedBySite[siteName].forEach(user => {
+                    const isNever = user.isNever;
+                    if (!hideNever || !isNever) {
+                         usersForEmail.push(user);
+                    }
+                });
+            }
+
+            if (usersForEmail.length === 0) {
+                showModal(`No users to email for ${siteName} (they may all be 'Never Completed' and hidden by the filter).`);
+                return;
+            }
+
+            const subject = "Mandatory Training T2722D - Overdue";
+
+            // Dynamic Greeting
+            const hour = new Date().getHours();
+            const greeting = hour < 12 ? "Good Morning" : "Good Afternoon";
+
+            // Create Rich HTML content
+            let userRowsHtml = usersForEmail.map(u =>
+                `<tr><td style="padding: 4px 8px; border-bottom: 1px solid #ddd;">${u.name}</td><td style="padding: 4px 8px; border-bottom: 1px solid #ddd;">${u.username}</td></tr>`
+            ).join('');
+
+            const htmlBody = `
+                <p>${greeting},</p>
+                <p></p>
+                <p>The above training is a mandatory requirement to be completed annually.</p>
+                <p></p>
+                <p>Listed below are who have either not completed or are due to retake their repeat booking.</p>
+                <table style="border-collapse: collapse; width: 100%; max-width: 400px; margin-bottom: 15px; border: 1px solid #ccc;">
+                    <thead style="background-color: #f2f2f2;">
+                        <tr>
+                            <th style="text-align: left; padding: 8px; border-bottom: 2px solid #ccc;">Name</th>
+                            <th style="text-align: left; padding: 8px; border-bottom: 2px solid #ccc;">Username</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${userRowsHtml}
+                    </tbody>
+                </table>
+                <p></p>
+                <p>The learning is already on their profiles. You can access the GTLS portal here:</p>
+                <p></p>
+                <p><a href="${PORTAL_LINK}" style="color: #0056b3; text-decoration: underline;">Access GTLS Portal</a></p>
+                <p></p>
+                <p>Please action as soon as possible.</p>
+                <p></p>
+                <p><strong>Please note:</strong> As this is a safety-related course covering the safe handling of high-voltage systems and lithium-ion batteries, it is a requirement for all employees who may come into contact with electric or hybrid vehicles as part of their role. Therefore, all listed delegates are required to complete this training, regardless of whether they are technicians or not.</p>
+            `;
+
+            // 1. Populate the preview modal
+            document.getElementById('emailPreviewContent').innerHTML = htmlBody;
+
+            // 2. Update the "Open Mail" link with just the subject
+            const mailtoLink = `mailto:?subject=${encodeURIComponent(subject)}`;
+            document.getElementById('openMailLink').href = mailtoLink;
+
+            // 3. Show the modal
+            document.getElementById('emailModal').classList.remove('hidden');
+        }
+
+        function closeEmailModal() {
+            document.getElementById('emailModal').classList.add('hidden');
+        }
+
+        function copyEmailContent() {
+            const content = document.getElementById('emailPreviewContent');
+
+            // Fallback method using document.execCommand which works in more restrictive environments
+            const selection = window.getSelection();
+            const range = document.createRange();
+            range.selectNodeContents(content);
+            selection.removeAllRanges();
+            selection.addRange(range);
+
+            try {
+                const successful = document.execCommand('copy');
+                selection.removeAllRanges();
+
+                if (successful) {
+                    // Visual feedback on button
+                    const copyBtn = document.querySelector('#emailModal button[onclick="copyEmailContent()"]');
+                    const originalText = copyBtn.innerHTML;
+                    copyBtn.innerHTML = `
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
+                        Copied!
+                    `;
+                    copyBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                    copyBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+
+                    setTimeout(() => {
+                        copyBtn.innerHTML = originalText;
+                        copyBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+                        copyBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+                    }, 2000);
+
+                    // Log it as emailed when they copy
+                    if (currentSiteBeingEmailed) {
+                        logEmailedSite(currentSiteBeingEmailed);
+                        updateEmailedButtons();
+                    }
+                } else {
+                    throw new Error('execCommand returned false');
+                }
+            } catch (err) {
+                console.error('Failed to copy: ', err);
+                // Since we are selecting it for them, we can just ask them to press Ctrl+C
+                alert('Automatic copy failed. The text has been selected for you. Please press Ctrl+C to copy.');
+            }
+        }
+
+        function downloadTrackerExcel() {
+            const log = getEmailedLog();
+            const sitesEmailed = Object.keys(log);
+
+            if (sitesEmailed.length === 0) {
+                showModal("No sites have been logged as emailed yet. Please email a site first.");
+                return;
+            }
+
+            const excelData = [];
+            excelData.push(['Site Name', 'User Name', 'Username', 'Last Completed', 'Due Date', 'Date Emailed']); // Headers
+
+            const hideNever = document.getElementById('hideNeverCompleted').checked;
+
+            // We need to iterate through the sites in the log
+            for (const siteName of sitesEmailed) {
+                const dateEmailed = log[siteName];
+                const usersForSite = groupedBySite[siteName];
+
+                if (!usersForSite) continue; // Should not happen, but good to check
+
+                for (const user of usersForSite) {
+                    // Respect the "Hide Never Completed" filter
+                    if (hideNever && user.isNever) {
+                        continue;
+                    }
+
+                    excelData.push([
+                        siteName,
+                        user.name,
+                        user.username,
+                        user.lastDoneStr,
+                        user.dueDateStr,
+                        dateEmailed
+                    ]);
+                }
+            }
+
+            if (excelData.length <= 1) { // Only headers
+                showModal("No users to export. The sites you emailed may have been filtered out (e.g., all users were 'Never Completed' and the filter is on).");
+                return;
+            }
+
+            // Create workbook and worksheet
+            const ws = XLSX.utils.aoa_to_sheet(excelData);
+
+            // Add auto-filter
+            ws['!autofilter'] = { ref: `A1:F${excelData.length}` };
+
+            // Set column widths
+            ws['!cols'] = [
+                { wch: 40 }, // Site Name
+                { wch: 30 }, // User Name
+                { wch: 20 }, // Username
+                { wch: 16 }, // Last Completed
+                { wch: 16 }, // Due Date
+                { wch: 15 }  // Date Emailed
+            ];
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Emailed Sites Log');
+
+            // Generate and download the file
+            const today = formatDate(new Date()).replace(/\//g, '-');
+            XLSX.writeFile(wb, `T2722D_Emailed_Sites_Tracker_${today}.xlsx`);
+        }
+
+
+        // --- 5. LocalStorage for Email Logging ---
+
+        const LOG_KEY = 'emailedSitesLog_T2722D';
+
+        function logEmailedSite(siteName) {
+            try {
+                let log = JSON.parse(localStorage.getItem(LOG_KEY)) || {};
+                const today = formatDate(new Date());
+                log[siteName] = today; // Store the date emailed
+                localStorage.setItem(LOG_KEY, JSON.stringify(log));
+            } catch (e) {
+                console.error("Could not write to localStorage", e);
+            }
+        }
+
+        function getEmailedLog() {
+            try {
+                return JSON.parse(localStorage.getItem(LOG_KEY)) || {};
+            } catch (e) {
+                console.error("Could not read from localStorage", e);
+                return {};
+            }
+        }
+
+        function updateEmailedButtons() {
+            const log = getEmailedLog();
+            const buttons = document.querySelectorAll('.email-button');
+
+            buttons.forEach(btn => {
+                const siteName = btn.getAttribute('data-site-name');
+                if (log[siteName]) {
+                    btn.classList.remove('bg-blue-500', 'hover:bg-blue-600');
+                    btn.classList.add('bg-green-600', 'cursor-default', 'opacity-90');
+                    btn.textContent = `Emailed (${log[siteName]})`;
+                    btn.title = `You last emailed this site on ${log[siteName]}`;
+                } else {
+                    // Ensure buttons are reset if log is cleared
+                    btn.classList.add('bg-blue-500', 'hover:bg-blue-600');
+                    btn.classList.remove('bg-green-600', 'cursor-default', 'opacity-90');
+                    btn.textContent = 'Email Site';
+                    btn.title = '';
+                }
+            });
+        }
+
+        function resetEmailLog() {
+            // Use a custom confirmation modal
+            showModal("Are you sure you want to reset the email log? All 'Emailed' buttons will be reset to blue.", true, () => {
+                try {
+                    localStorage.removeItem(LOG_KEY);
+                    updateEmailedButtons(); // Re-render buttons to their original state
+                } catch (e) {
+                    console.error("Could not clear localStorage", e);
+                    showModal("Error: Could not clear the email log.");
+                }
+            });
+        }
+
+        // --- 6. Custom Alert/Confirm Modals ---
+        // Add a modal to the body
+        (function createModal() {
+            const modalHTML = `
+                <div id="customModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+                    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+                        <div class="mt-3 text-center">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900" id="modalTitle">Alert</h3>
+                            <div class="mt-2 px-7 py-3">
+                                <p class="text-sm text-gray-500" id="modalMessage">Modal content.</p>
+                            </div>
+                            <div class="items-center px-4 py-3" id="modalButtons">
+                                <button id="modalOkButton" class="px-4 py-2 bg-blue-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    OK
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+            // Add click listener to close
+             document.getElementById('customModal').addEventListener('click', (e) => {
+                if (e.target.id === 'customModal') { // Only close if clicking backdrop
+                   // find and click cancel button if it exists, otherwise ok
+                   (document.getElementById('modalCancelButton') || document.getElementById('modalOkButton')).click();
+                }
+            });
+        })();
+
+        function showModal(message, isConfirm = false, onConfirm = null) {
+            const modal = document.getElementById('customModal');
+            const modalMessage = document.getElementById('modalMessage');
+            const modalButtons = document.getElementById('modalButtons');
+            const modalTitle = document.getElementById('modalTitle');
+
+            modalMessage.textContent = message;
+
+            // Clear old buttons
+            modalButtons.innerHTML = '';
+
+            if (isConfirm) {
+                modalTitle.textContent = "Confirmation";
+                // Add Cancel Button
+                const cancelBtn = document.createElement('button');
+                cancelBtn.id = 'modalCancelButton';
+                cancelBtn.textContent = 'Cancel';
+                cancelBtn.className = 'px-4 py-2 bg-gray-300 text-gray-800 text-base font-medium rounded-md w-auto shadow-sm hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300 mr-2';
+                cancelBtn.onclick = () => modal.classList.add('hidden');
+                modalButtons.appendChild(cancelBtn);
+
+                // Add OK Button
+                const okBtn = document.createElement('button');
+                okBtn.id = 'modalOkButton';
+                okBtn.textContent = 'OK';
+                okBtn.className = 'px-4 py-2 bg-red-600 text-white text-base font-medium rounded-md w-auto shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500';
+                okBtn.onclick = () => {
+                    modal.classList.add('hidden');
+                    if (onConfirm) onConfirm();
+                };
+                modalButtons.appendChild(okBtn);
+
+            } else {
+                modalTitle.textContent = "Alert";
+                // Add OK Button
+                const okBtn = document.createElement('button');
+                okBtn.id = 'modalOkButton';
+                okBtn.textContent = 'OK';
+                okBtn.className = 'px-4 py-2 bg-blue-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500';
+                okBtn.onclick = () => modal.classList.add('hidden');
+                modalButtons.appendChild(okBtn);
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        // Replace native confirm/alert to avoid issues
+        const nativeConfirm = window.confirm;
+        window.confirm = (message) => {
+            console.warn("window.confirm() is deprecated. Use showModal().");
+            showModal(message);
+            return false; // Always return false to prevent default action
+        };
+
+        const nativeAlert = window.alert;
+        window.alert = (message) => {
+            console.warn("window.alert() is deprecated. Use showModal().");
+            showModal(message);
+        };
+
+
+    </script>
+</body>
+</html>

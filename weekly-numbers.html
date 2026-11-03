@@ -985,15 +985,19 @@
             const data = await readExcelFile(file);
             const weekDate = extractDateFromFilename(file.name);
 
-            const pcSheet = data.SheetNames.find(s =>
-                s.toLowerCase() === 'technical pc' || s.toLowerCase() === 'pc'
-            );
-            const vanSheet = data.SheetNames.find(s =>
-                s.toLowerCase() === 'technical van' || s.toLowerCase() === 'van'
-            );
+            // Match the sheet whatever the word order or spacing:
+            // "Technical Van", "Van Technical", "Van" all count.
+            const findTechnicalSheet = (kind) => data.SheetNames.find(s => {
+                const words = s.toLowerCase().trim().split(/\s+/);
+                return words.includes(kind) &&
+                    (words.length === 1 || (words.length === 2 && words.includes('technical')));
+            });
+            const pcSheet = findTechnicalSheet('pc');
+            const vanSheet = findTechnicalSheet('van');
 
             if (!pcSheet || !vanSheet) {
-                throw new Error(`File ${file.name} missing PC or Van sheet`);
+                const missing = [!pcSheet && 'Technical PC', !vanSheet && 'Technical Van'].filter(Boolean).join(' and ');
+                throw new Error(`File ${file.name} is missing the ${missing} sheet. Sheets found: ${data.SheetNames.join(', ')}`);
             }
 
             const pcCourses = parseSheetData(data.Sheets[pcSheet], 'PC');
